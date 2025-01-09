@@ -1,6 +1,9 @@
+import { randomUUID } from "node:crypto";
+
 import * as core from "@actions/core";
 
 const WORKFLOW_TIMEOUT_SECONDS = 5 * 60;
+const WORKFLOW_JOB_STEPS_RETRY_SECONDS = 5;
 
 /**
  * action.yaml definition.
@@ -42,9 +45,14 @@ export interface ActionConfig {
   workflowTimeoutSeconds: number;
 
   /**
+   * Time in retries for identifying the Run ID.
+   */
+  workflowJobStepsRetrySeconds: number;
+
+  /**
    * Specify a static ID to use instead of a distinct ID.
    */
-  distinctId?: string;
+  distinctId: string;
 }
 
 type ActionWorkflowInputs = Record<string, string | number | boolean>;
@@ -60,14 +68,18 @@ export function getConfig(): ActionConfig {
     ref: core.getInput("ref", { required: true }),
     repo: core.getInput("repo", { required: true }),
     owner: core.getInput("owner", { required: true }),
-    workflow: getWorkflowValueAsNumber(
+    workflow: tryGetWorkflowAsNumber(
       core.getInput("workflow", { required: true }),
     ),
     workflowInputs: getWorkflowInputs(core.getInput("workflow_inputs")),
     workflowTimeoutSeconds:
       getNumberFromValue(core.getInput("workflow_timeout_seconds")) ??
       WORKFLOW_TIMEOUT_SECONDS,
-    distinctId: getOptionalWorkflowValue(core.getInput("distinct_id")),
+    workflowJobStepsRetrySeconds:
+      getNumberFromValue(core.getInput("workflow_job_steps_retry_seconds")) ??
+      WORKFLOW_JOB_STEPS_RETRY_SECONDS,
+    distinctId:
+      getOptionalWorkflowValue(core.getInput("distinct_id")) ?? randomUUID(),
   };
 }
 
@@ -119,7 +131,7 @@ function getWorkflowInputs(
   }
 }
 
-function getWorkflowValueAsNumber(workflowInput: string): string | number {
+function tryGetWorkflowAsNumber(workflowInput: string): string | number {
   try {
     // We can assume that the string is defined and not empty at this point.
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -132,6 +144,9 @@ function getWorkflowValueAsNumber(workflowInput: string): string | number {
 
 /**
  * We want empty strings to simply be undefined.
+ *
+ * While simple, make it very clear that the usage of `||`
+ * is intentional here.
  */
 function getOptionalWorkflowValue(workflowInput: string): string | undefined {
   return workflowInput || undefined;
